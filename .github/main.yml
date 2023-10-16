@@ -1,0 +1,70 @@
+---
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+env:
+  REGISTRY: 'ghcr.io'
+jobs:
+  build:
+    strategy:
+      matrix:
+        otp:
+          - 26
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{matrix.otp}}
+      - run: make deps app dialyze eunit
+  package:
+    needs: build
+    permissions:
+      packages: write
+    strategy:
+      matrix:
+        otp:
+          - 26
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{steps.bdra.outputs.image}}
+      tags: ${{steps.bdra.outputs.tags}}
+    steps:
+      - uses: shortishly/beam-docker-release-action@main
+        id: bdra
+        with:
+          registry: ${{env.REGISTRY}}
+          username: ${{github.actor}}
+          password: ${{secrets.GITHUB_TOKEN}}
+          build-image: erlang:${{matrix.otp}}
+          image-description: >-
+            msec is a MySQL/MariaDB replication cache with a Redis API
+          image-licenses: Apache-2.0
+  smoke-test:
+    needs: package
+    strategy:
+      matrix:
+        db:
+          - 'mysql:8.1'
+          - 'mysql:8.0'
+          - 'mariadb:11.1'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: >-
+          ./bin/up
+        env:
+          POSTGRES_IMAGE: ${{matrix.pg}}
+          PGEC_IMAGE: ${{needs.package.outputs.image}}
+          PGEC_VERSION: ${{needs.package.outputs.tags}}
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y redis-tools netcat netcat-traditional bats
+          sudo update-alternatives --set nc /bin/nc.traditional
+      - run: |
+          sleep 60
+      - run: |
+          bats test/bats

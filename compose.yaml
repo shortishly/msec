@@ -1,0 +1,41 @@
+---
+services:
+  db:
+    image:
+      ${MYSQL_IMAGE:-mysql:8.1}
+    environment:
+      MYSQL_ROOT_PASSWORD: secret
+      MARIADB_HOME: /etc/cnf/mariadb
+      MYSQL_HOME: /etc/cnf/mysql
+    command:
+      --tls-version=${TLS_VERSION:-TLSv1.2,TLSv1.3}
+    volumes:
+      - db:/var/lib/mysql
+      - ./example/initdb.d:/docker-entrypoint-initdb.d
+      - ./example/data:/mnt
+      - ./example/cnf:/etc/cnf
+      - ./example/my.cnf:/root/.my.cnf
+    ports:
+      - 3306:3306
+  msec:
+    image:
+      ${MSEC_IMAGE:-ghcr.io/shortishly/msec:latest}
+    environment:
+      MSEC_REPLICA_UUID: ff275651-e77b-4acf-92f5-fb78b43ab40e
+      MSEC_DATABASE_URI: mysql://root:secret@db:3306/shortishly
+      MSC_SOCKET_TRACE: true
+      MSC_MM_TRACE: true
+    volumes:
+      - cache:/data
+    ports:
+      - 6379:6379
+      - 9100:9100
+    links:
+      - db
+    pull_policy:
+      ${PULL_POLICY:-always}
+volumes:
+  db:
+    driver: local
+  cache:
+    driver: local
