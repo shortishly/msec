@@ -25,6 +25,8 @@ handle_event({call, From}, {Action, _}, _, _)
   when Action == query;
        Action == xid;
        Action == gtid_list;
+       Action == stop;
+       Action == previous_gtids_log;
        Action == binlog_checkpoint;
        Action == rotate;
        Action == format_description;

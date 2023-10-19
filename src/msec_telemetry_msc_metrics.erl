@@ -19,6 +19,41 @@
 -export([handle/4]).
 -include_lib("kernel/include/logger.hrl").
 
+handle([msc, socket, Type] = EventName,
+       #{bytes := Bytes} = Measurements,
+       #{telemetry := #{net := #{peer := #{port := Port}}}} = Metadata,
+       Config) when Type == recv;
+                    Type == connect;
+                    Type == send ->
+    %% Cumulative bytes received
+    ?LOG_DEBUG(#{event_name => EventName,
+                 measurements => Measurements,
+                 metadata => Metadata,
+                 config => Config}),
+
+    metrics:counter(
+      [#{name => msec_util:snake_case(EventName ++ [bytes]),
+         label => #{port => Port},
+         delta => Bytes}]);
+
+handle([msc, mm, Type] = EventName,
+       #{count := N} = Measurements,
+       Metadata,
+       Config) when Type == recv;
+                    Type == send;
+                    Type == upgrade ->
+    %% Maintain a count of each type of message received.
+    ?LOG_DEBUG(#{event_name => EventName,
+                 measurements => Measurements,
+                 metadata => Metadata,
+                 config => Config}),
+
+    metrics:counter(
+      [#{name => msec_util:snake_case(EventName ++ [count]),
+         label => maps:merge(
+                    maps:with([action], Measurements),
+                    maps:with([operator], Metadata)),
+         delta => N}]);
 
 %% Fall through clause to log any missed telemetry events from msc.
 %%
