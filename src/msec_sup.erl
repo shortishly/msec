@@ -32,7 +32,8 @@ start_link() ->
 
 
 init([]) ->
-    Procs = [supervisor(msec_storage_sup),
+    Procs = [worker(msec_telemetry),
+             supervisor(msec_storage_sup),
              supervisor(
                #{m => msec_replica_sup,
                  args => [#{uri => msc_uri:parse(

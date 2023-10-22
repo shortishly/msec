@@ -1,2 +1,5 @@
-_rel
-deps
+/_rel
+/deps
+/ebin
+/tmp
+/msec.d

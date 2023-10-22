@@ -19,11 +19,11 @@
 -export([handle/4]).
 -include_lib("kernel/include/logger.hrl").
 
+
 handle([msc, socket, Type] = EventName,
        #{bytes := Bytes} = Measurements,
        #{telemetry := #{net := #{peer := #{port := Port}}}} = Metadata,
        Config) when Type == recv;
-                    Type == connect;
                     Type == send ->
     %% Cumulative bytes received
     ?LOG_DEBUG(#{event_name => EventName,
@@ -35,6 +35,20 @@ handle([msc, socket, Type] = EventName,
       [#{name => msec_util:snake_case(EventName ++ [bytes]),
          label => #{port => Port},
          delta => Bytes}]);
+
+handle([msc, socket, Type] = EventName,
+       #{count := N} = Measurements,
+       Metadata,
+       Config) when Type == error;
+                    Type == connect ->
+    ?LOG_DEBUG(#{event_name => EventName,
+                 measurements => Measurements,
+                 metadata => Metadata,
+                 config => Config}),
+    metrics:counter(
+      [#{name => msec_util:snake_case(EventName ++ [count]),
+         label => maps:with([reason], Metadata),
+         delta => N}]);
 
 handle([msc, mm, Type] = EventName,
        #{count := N} = Measurements,

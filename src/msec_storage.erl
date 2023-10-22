@@ -274,9 +274,13 @@ handle_event(internal,
              _,
              _) ->
     {keep_state_and_data,
-     nei({storage,
-          #{request => {put, Bucket, Key, Value, [], ?STD_TAG, infinity, false},
-            label => storage_label(Action, Detail)}})};
+     [nei({storage,
+           #{request => {put, Bucket, Key, Value, [], ?STD_TAG, infinity, false},
+             label => storage_label(Action, Detail)}}),
+      nei({telemetry,
+           Action,
+           #{count => 1},
+           #{bucket => Bucket}})]};
 
 handle_event(internal,
              {delete = Action,
@@ -285,9 +289,13 @@ handle_event(internal,
              _,
              _) ->
     {keep_state_and_data,
-     nei({storage,
-          #{request => {put, Bucket, Key, delete, [], ?STD_TAG, infinity, false},
-            label => storage_label(Action, Detail)}})};
+     [nei({storage,
+           #{request => {put, Bucket, Key, delete, [], ?STD_TAG, infinity, false},
+             label => storage_label(Action, Detail)}}),
+      nei({telemetry,
+           Action,
+           #{count => 1},
+           #{bucket => Bucket}})]};
 
 handle_event(internal,
              {get = Action,
@@ -297,9 +305,13 @@ handle_event(internal,
              _,
              _) ->
     {keep_state_and_data,
-     nei({storage,
-          #{request => {get, Bucket, Key, ?STD_TAG},
-            label => storage_label(Action, Detail)}})};
+     [nei({storage,
+           #{request => {get, Bucket, Key, ?STD_TAG},
+             label => storage_label(Action, Detail)}}),
+      nei({telemetry,
+           Action,
+           #{count => 1},
+           #{bucket => Bucket}})]};
 
 handle_event(internal,
              {storage, #{request := Request, label := Label}},
@@ -337,7 +349,32 @@ handle_event(info, Msg, _, #{requests := Existing} = Data) ->
 
         {{error, {Reason, _}}, _, UpdatedRequests} ->
             {stop, Reason, Data#{requests := UpdatedRequests}}
-    end.
+    end;
+
+handle_event(internal,
+             {telemetry, EventName, Measurements},
+             _,
+             _) ->
+    {keep_state_and_data,
+     nei({telemetry, EventName, Measurements, #{}})};
+
+handle_event(internal,
+             {telemetry, EventName, Measurements, Metadata},
+             _,
+             _) when is_atom(EventName) ->
+    {keep_state_and_data,
+     nei({telemetry, [EventName], Measurements, Metadata})};
+
+handle_event(internal,
+             {telemetry, EventName, Measurements, Metadata},
+             _,
+             Data) ->
+    ok = telemetry:execute([msec, storage] ++ EventName,
+                           Measurements,
+                           maps:merge(
+                             maps:with([operator, client_flags], Data),
+                             Metadata)),
+    keep_state_and_data.
 
 
 dt(#{database := Database, table := Table}) ->
