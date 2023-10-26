@@ -34,6 +34,20 @@ handle([msec, storage, _] = EventName,
          label => Metadata,
          delta => N}]);
 
+handle([msec, storage, _] = EventName,
+       #{value := N} = Measurements,
+       Metadata,
+       Config) ->
+    ?LOG_DEBUG(#{event_name => EventName,
+                 measurements => Measurements,
+                 metadata => Metadata,
+                 config => Config}),
+
+    metrics:gauge(
+      [#{name => msec_util:snake_case(EventName),
+         label => Metadata,
+         value => N}]);
+
 %% Fall through clause to log any missed telemetry events from msec.
 %%
 handle(EventName, Measurements, Metadata, Config) ->

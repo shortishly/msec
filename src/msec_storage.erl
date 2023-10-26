@@ -31,7 +31,7 @@
 -import(msec_statem, [send_request/1]).
 -include_lib("kernel/include/logger.hrl").
 -include_lib("leveled/include/leveled.hrl").
-
+-record(entry, {key, value, ops = 0}).
 
 
 start_link() ->
@@ -151,10 +151,11 @@ callback_mode() ->
 
 init([]) ->
     process_flag(trap_exit, true),
-    _ = ets:new(?MODULE, [protected, named_table]),
     {ok,
      ready,
-     #{requests => gen_server:reqids_new()},
+     #{requests => gen_server:reqids_new(),
+       tables => ets:new(tables, []),
+       cache => ets:new(cache, [{keypos, 2}])},
      nei(leveled)}.
 
 
@@ -198,17 +199,36 @@ handle_event({call, From},
               #{action := read,
                 key := Key} = Detail},
              _,
-             _) ->
-    {keep_state_and_data,
-     nei({get, #{from => From, bucket => dt(Detail), key => Key}})};
+             #{cache := Cache}) ->
+    Bucket = dt(Detail),
+    case ets:lookup(Cache, {Bucket, Key}) of
+        [] ->
+            {keep_state_and_data,
+             [nei({telemetry,
+                   cache,
+                   #{count => 1},
+                   #{action => miss, bucket => Bucket}}),
+              nei({get, #{from => From, bucket => Bucket, key => Key}})]};
+
+        [#entry{value = Value}] ->
+            {keep_state_and_data,
+             [{reply, From, {ok, Value}},
+              nei({telemetry,
+                   cache,
+                   #{count => 1},
+                   #{action => hit, bucket => Bucket}}),
+              {{timeout, {Bucket, Key}},
+               msec_config:timeout(expiry),
+               expired}]}
+    end;
 
 handle_event({call, From},
              {request,
               #{action := table_map,
                 table_id := TableId} = Mapping},
              _,
-             _) ->
-    ets:insert(?MODULE, {TableId, Mapping}),
+             #{tables := Tables}) ->
+    ets:insert(Tables, {TableId, Mapping}),
     {keep_state_and_data,
      nei({put,
           #{from => From,
@@ -220,12 +240,29 @@ handle_event({call, From},
              {request,
               #{action := metadata} = Metadata},
              _,
-             _) ->
-    {keep_state_and_data,
-     nei({get,
-          #{from => From,
-            bucket => <<"msec/mapping">>,
-            key => dt(Metadata)}})};
+             #{cache := Cache}) ->
+    Bucket = <<"msec/mapping">>,
+    Key = dt(Metadata),
+    case ets:lookup(Cache, {Bucket, Key}) of
+        [] ->
+            {keep_state_and_data,
+             [nei({telemetry,
+                   cache,
+                   #{count => 1},
+                   #{action => miss, bucket => Bucket}}),
+              nei({get, #{from => From, bucket => Bucket, key => Key}})]};
+
+        [#entry{value = Value}] ->
+            {keep_state_and_data,
+             [{reply, From, {ok, Value}},
+              nei({telemetry,
+                   cache,
+                   #{count => 1},
+                   #{action => hit, bucket => Bucket}}),
+              {{timeout, {Bucket, Key}},
+               msec_config:timeout(expiry),
+               expired}]}
+    end;
 
 handle_event({call, From},
              {request,
@@ -233,18 +270,58 @@ handle_event({call, From},
                 row := Row,
                 table_id := TableId}},
              _,
-             _) ->
-    case ets:lookup(?MODULE, TableId) of
+             #{tables := Tables}) ->
+    case ets:lookup(Tables, TableId) of
         [] ->
             {stop, {no_such_table, TableId}};
 
         [{_, Mapping}] ->
-            {keep_state_and_data,
-             nei({put,
-                  #{from => From,
-                    bucket => dt(Mapping),
+            BKV = #{bucket => dt(Mapping),
                     key => key(Row, Mapping),
-                    value => value(Row, Mapping)}})}
+                    value => value(Row, Mapping)},
+
+            {keep_state_and_data,
+             [nei({cache, BKV}),
+              nei({put, BKV#{from => From}})]}
+    end;
+
+handle_event(internal,
+             {cache,
+              #{bucket := Bucket,
+                key := Key,
+                value := Value}},
+              _,
+              #{cache := Cache}) ->
+    case ets:update_element(
+           Cache,
+           {Bucket, Key},
+           {#entry.value,  Value}) of
+
+        true ->
+            {keep_state_and_data,
+             [nei({telemetry,
+                   cache,
+                   #{count => 1},
+                   #{action => update,
+                     bucket => Bucket}}),
+              {{timeout, {Bucket, Key}},
+               msec_config:timeout(expiry),
+               expired}]};
+
+        false ->
+            true = ets:insert_new(
+                     Cache,
+                     #entry{key = {Bucket, Key}, value = Value}),
+
+            {keep_state_and_data,
+             [nei({telemetry,
+                   cache,
+                   #{count => 1},
+                   #{action => insert,
+                     bucket => Bucket}}),
+              {{timeout, {Bucket, Key}},
+               msec_config:timeout(expiry),
+               expired}]}
     end;
 
 handle_event({call, From},
@@ -253,17 +330,28 @@ handle_event({call, From},
                 row := Row,
                 table_id := TableId}},
              _,
-             _) ->
-    case ets:lookup(?MODULE, TableId) of
+             #{cache := Cache, tables := Tables}) ->
+    case ets:lookup(Tables, TableId) of
         [] ->
             {stop, {no_such_table, TableId}};
 
         [{_, Mapping}] ->
+            Bucket = dt(Mapping),
+            Key = key(Row, Mapping),
+
+            ets:delete(Cache, {Bucket, Key}),
+
             {keep_state_and_data,
-             nei({delete,
-                  #{from => From,
-                    bucket => dt(Mapping),
-                    key => key(Row, Mapping)}})}
+             [nei({delete,
+                   #{from => From,
+                     bucket => Bucket,
+                     key => Key}}),
+              nei({telemetry,
+                   cache,
+                   #{count => 1},
+                   #{action => delete,
+                     bucket => Bucket}}),
+              {{timeout, {Bucket, Key}}, infinity, cancelled}]}
     end;
 
 handle_event(internal,
@@ -274,13 +362,9 @@ handle_event(internal,
              _,
              _) ->
     {keep_state_and_data,
-     [nei({storage,
-           #{request => {put, Bucket, Key, Value, [], ?STD_TAG, infinity, false},
-             label => storage_label(Action, Detail)}}),
-      nei({telemetry,
-           Action,
-           #{count => 1},
-           #{bucket => Bucket}})]};
+     nei({storage,
+          #{request => {put, Bucket, Key, Value, [], ?STD_TAG, infinity, false},
+            label => storage_label(Action, Detail)}})};
 
 handle_event(internal,
              {delete = Action,
@@ -289,13 +373,9 @@ handle_event(internal,
              _,
              _) ->
     {keep_state_and_data,
-     [nei({storage,
-           #{request => {put, Bucket, Key, delete, [], ?STD_TAG, infinity, false},
-             label => storage_label(Action, Detail)}}),
-      nei({telemetry,
-           Action,
-           #{count => 1},
-           #{bucket => Bucket}})]};
+     nei({storage,
+          #{request => {put, Bucket, Key, delete, [], ?STD_TAG, infinity, false},
+            label => storage_label(Action, Detail)}})};
 
 handle_event(internal,
              {get = Action,
@@ -305,13 +385,9 @@ handle_event(internal,
              _,
              _) ->
     {keep_state_and_data,
-     [nei({storage,
-           #{request => {get, Bucket, Key, ?STD_TAG},
-             label => storage_label(Action, Detail)}}),
-      nei({telemetry,
-           Action,
-           #{count => 1},
-           #{bucket => Bucket}})]};
+     nei({storage,
+          #{request => {get, Bucket, Key, ?STD_TAG},
+            label => storage_label(Action, Detail)}})};
 
 handle_event(internal,
              {storage, #{request := Request, label := Label}},
@@ -324,32 +400,103 @@ handle_event(internal,
                          Label,
                          Requests)}};
 
+handle_event(internal, backlog = Action, _, #{requests := Requests}) ->
+    {keep_state_and_data,
+     nei({telemetry,
+          Action,
+          #{value => gen_server:reqids_size(Requests)}})};
+
+handle_event(
+  internal,
+  {response,
+   #{reply := {ok, Value} = Reply,
+     label := #{action := get = Action,
+                bucket := Bucket,
+                key := Key,
+                from := From}}},
+  _,
+  _) ->
+    {keep_state_and_data,
+     [{reply, From, Reply},
+      nei({telemetry,
+           Action,
+           #{count => 1},
+           #{bucket => Bucket}}),
+      nei({cache,
+           #{bucket => Bucket,
+             key => Key,
+             value => Value}})]};
+
+handle_event(internal,
+             {response,
+              #{reply := Reply,
+                label := #{action := get = Action,
+                           bucket := Bucket,
+                           from := From}}},
+             _,
+             _) ->
+    {keep_state_and_data,
+     [{reply, From, Reply},
+      nei({telemetry,
+           Action,
+           #{count => 1},
+           #{bucket => Bucket}})]};
+
+handle_event(internal,
+             {response,
+              #{reply := Reply,
+                label := #{action := Action,
+                           bucket := Bucket,
+                           from := From}}},
+             _,
+             _) when Action == put;
+                     Action == delete ->
+    {keep_state_and_data,
+     [{reply, From, ok},
+      nei({telemetry,
+           Action,
+           #{count => 1},
+           #{reply => Reply, bucket => Bucket}})]};
+
+handle_event(internal,
+             {response,
+              #{reply := Reply,
+                label := #{action := Action,
+                           bucket := Bucket}}},
+             _,
+             _) when Action == put;
+                     Action == delete ->
+    {keep_state_and_data,
+     nei({telemetry,
+          Action,
+          #{count => 1},
+          #{reply => Reply, bucket => Bucket}})};
+
 handle_event(info, {'EXIT', _, _}, _, _) ->
     stop;
 
 handle_event(info, Msg, _, #{requests := Existing} = Data) ->
     case gen_server:check_response(Msg, Existing, true) of
-        {{reply, Reply}, {get, From}, Updated} ->
+        {{reply, Reply}, Label, Updated} ->
             {keep_state,
              Data#{requests := Updated},
-             {reply, From, Reply}};
-
-        {{reply, _}, {put, From}, Updated} ->
-            {keep_state,
-             Data#{requests := Updated},
-             {reply, From, ok}};
-
-        {{reply, _}, {delete, From}, Updated} ->
-            {keep_state,
-             Data#{requests := Updated},
-             {reply, From, ok}};
-
-        {{reply, _}, Label, Updated} when Label == put; Label == delete ->
-            {keep_state, Data#{requests := Updated}};
+             [nei({telemetry,
+                   reqids_size,
+                   #{value => gen_server:reqids_size(Updated)}}),
+                  nei({response, #{label => Label, reply => Reply}})]};
 
         {{error, {Reason, _}}, _, UpdatedRequests} ->
             {stop, Reason, Data#{requests := UpdatedRequests}}
     end;
+
+handle_event({timeout, {Bucket, _} = Key}, expired, _, #{cache := Cache}) ->
+    ets:delete(Cache, Key),
+    {keep_state_and_data,
+     nei({telemetry,
+          cache,
+          #{count => 1},
+          #{action => expired,
+            bucket => Bucket}})};
 
 handle_event(internal,
              {telemetry, EventName, Measurements},
@@ -407,8 +554,5 @@ key(Tuple, #{metadata := #{simple_primary_key := Composite}}) ->
       [element(Position + 1, Tuple) || Position <- Composite]).
 
 
-storage_label(Action, #{from := From}) ->
-    {Action, From};
-
-storage_label(Action, _) ->
-    Action.
+storage_label(Action, Detail) ->
+    (maps:with([from, bucket, key], Detail))#{action => Action}.

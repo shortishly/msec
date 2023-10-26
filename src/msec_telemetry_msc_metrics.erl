@@ -69,6 +69,20 @@ handle([msc, mm, Type] = EventName,
                     maps:with([operator], Metadata)),
          delta => N}]);
 
+handle([msc, _, _] = EventName,
+       #{value := N} = Measurements,
+       Metadata,
+       Config) ->
+    ?LOG_DEBUG(#{event_name => EventName,
+                 measurements => Measurements,
+                 metadata => Metadata,
+                 config => Config}),
+
+    metrics:gauge(
+      [#{name => msec_util:snake_case(EventName),
+         label => maps:with([operator], Metadata),
+         value => N}]);
+
 %% Fall through clause to log any missed telemetry events from msc.
 %%
 handle(EventName, Measurements, Metadata, Config) ->

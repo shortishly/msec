@@ -14,6 +14,8 @@
 %% limitations under the License.
 
 
-[msec, storage, get].
+[msec, storage, cache].
 [msec, storage, delete].
+[msec, storage, get].
 [msec, storage, put].
+[msec, storage, reqids_size].

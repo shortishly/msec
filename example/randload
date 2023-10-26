@@ -14,4 +14,26 @@
 # limitations under the License.
 #
 
-docker compose ps --format 'table {{.Service}}\t{{.Image}}\t{{.Status}}' $*
+while true;
+do
+
+    psql --host=postgres postgres postgres<<EOF
+    begin;
+
+    with rows as
+      (select * from randload tablesample bernoulli(1) limit 10)
+        delete from randload
+          where exists (select * from rows where rows.id = randload.id);
+
+    with rows as
+      (select * from randload tablesample bernoulli(1) limit 10)
+        update randload set updated_time = now(), uuid = gen_random_uuid()
+          where exists (select * from rows where rows.id = randload.id);
+
+    insert into randload (x) select generate_series(1, 10);
+    commit;
+EOF
+
+    sleep $((RANDOM % 5));
+
+done

@@ -9,22 +9,23 @@
     </a>
 </p>
 
-# MySQL/MariaDB Edge Cache (MSEC)
+# MySQL/Percona/MariaDB Edge Cache (MSEC)
 
-msec replicates data from MySQL/MariaDB, accessed with a Redis API with
+msec replicates data from MySQL, Percona and MariaDB, accessed with a Redis API with
 persistent storage.
 
 ## Features
 
-- Acts as a replica to MySQL databases [using replication with Global
-  Transaction Identifiers][mysql-gtid-replication].
-- Acts as a replica to MariaDB databases, [using replication with
-  Global Transaction Identifiers][mariadb-gtid].
-- Replicated Data is peristed using
-  [Leveled][github-martinsumner-leveled], a simple Key-Value store
-  based on the concept of Log-Structured Merge Trees.
+- Replica to MySQL, Percona and MariaDB databases using GTID
+  (supporting both [MySQL][mysql-gtid-replication] and
+  [MariaDB][mariadb-gtid] variants).
+- In memory cache with expiry, backed by a peristent store using
+  [leveled][github-martinsumner-leveled], based on the concept of log
+  structured merge trees (from [riak][github-basho-riak]).
 - Redis Compatible API, data can be accessed using the
   [hget][redis-hget] and [hgetall][redis-hgetall] commands.
+- Operational instrumentation with sample [Grafana][grafana]
+  dashboards, and [Prometheus][prometheus-io].
 
 ## Get Started
 
@@ -51,11 +52,31 @@ Change to the newly cloned directory:
 cd msec
 ```
 
-Start everything up with:
+Start everything up with (MySQL 8.1):
 
 ```shell
 ./bin/up
 ```
+
+To use MariaDB instead use:
+
+```shell
+MYSQL_IMAGE=mariadb:11.1 ./bin/up
+```
+
+Or Percona 8:
+
+```shell
+MYSQL_IMAGE=percona:8 ./bin/up
+```
+
+### Operational Instrumentation
+
+msec is instrumented using [telemetry][telemetry] with a
+[Prometheus][prometheus-io] http adapter published to port 9100.
+
+Some sample Grafana dashboards are installed as part of the docker
+compose, published to port 3000.
 
 ### Redis API
 
@@ -71,7 +92,6 @@ Rubble).
 
 ```shell
 redis-cli hgetall shortishly.grades.234-56-7890
-
  1) "test4"
  2) "90.0"
  3) "test3"
@@ -96,7 +116,6 @@ Or just Betty's grade:
 
 ```shell
 redis-cli hget shortishly.grades.234-56-7890 grade
-
 "C-"
 ```
 
@@ -110,14 +129,17 @@ The cache is automatically updated:
 
 ```shell
 redis-cli hget shortishly.grades.234-56-7890 grade
-
 "C"
 ```
 
 [cli-github-com]: https://cli.github.com
 [docker-engine-installation]: https://docs.docker.com/engine/installation/
+[github-basho-riak]: https://github.com/basho/riak
 [github-martinsumner-leveled]: https://github.com/martinsumner/leveled
+[grafana]: https://grafana.com/
 [mariadb-gtid]: https://mariadb.com/kb/en/gtid/
 [mysql-gtid-replication]: https://dev.mysql.com/doc/mysql-replication-excerpt/8.0/en/replication-gtids.html
+[prometheus-io]: https://prometheus.io
 [redis-hget]: https://redis.io/commands/hget/
 [redis-hgetall]: https://redis.io/commands/hgetall/
+[telemetry]: https://github.com/beam-telemetry/telemetry

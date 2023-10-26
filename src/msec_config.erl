@@ -20,6 +20,7 @@
 -export([enabled/1]).
 -export([leveled/1]).
 -export([replica/1]).
+-export([timeout/1]).
 -export([telemetry/1]).
 -import(envy, [envy/1]).
 
@@ -68,3 +69,14 @@ telemetry(config = Name) ->
     envy:get_env(msec,
                  msec_util:snake_case([?FUNCTION_NAME, Name]),
                  [app_env, {default, []}]).
+
+
+timeout(expiry = Name) ->
+    envy(#{caller => ?MODULE,
+           names => [Name, ?FUNCTION_NAME],
+           default => timer:minutes(5)});
+
+timeout(Name) ->
+    envy(#{caller => ?MODULE,
+           names => [Name, ?FUNCTION_NAME],
+           default => infinity}).
