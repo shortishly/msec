@@ -19,7 +19,7 @@ persistent storage.
 - Replica to MySQL, Percona and MariaDB databases using GTID
   (supporting both [MySQL][mysql-gtid-replication] and
   [MariaDB][mariadb-gtid] variants).
-- In memory cache with expiry, backed by a peristent store using
+- In memory cache with expiry, backed by a persistent store using
   [leveled][github-martinsumner-leveled], based on the concept of log
   structured merge trees (from [riak][github-basho-riak]).
 - Redis Compatible API, data can be accessed using the
