@@ -6,8 +6,7 @@
     "postStartCommand": "./bin/devcontainer-post-start",
 
     "containerEnv": {
-        "PGMP_DATABASE_USER": "postgres",
-        "PGMP_DATABASE_PASSWORD": "postgres"
+        "MSC_BACKOFF_RAND_INCREMENT": "10"
     },
 
     "hostRequirements": {
