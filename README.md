@@ -20,8 +20,9 @@ persistent storage.
   (supporting both [MySQL][mysql-gtid-replication] and
   [MariaDB][mariadb-gtid] variants).
 - In memory cache with expiry, backed by a persistent store using
-  [leveled][github-martinsumner-leveled], based on the concept of log
-  structured merge trees (from [riak][github-basho-riak]).
+  [leveled][github-martinsumner-leveled] (from
+  [riak][github-basho-riak]), based on the concept of log structured
+  merge trees.
 - Redis Compatible API, data can be accessed using the
   [hget][redis-hget] and [hgetall][redis-hgetall] commands.
 - Operational instrumentation with sample [Grafana][grafana]
