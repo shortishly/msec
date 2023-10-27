@@ -1,0 +1,45 @@
+{
+    "name": "msec",
+
+    "dockerFile": "Dockerfile",
+
+    "postStartCommand": "docker compose up --detach",
+
+    "containerEnv": {
+        "PGMP_DATABASE_USER": "postgres",
+        "PGMP_DATABASE_PASSWORD": "postgres"
+    },
+
+    "hostRequirements": {
+        "cpus": 2,
+        "memory": "4gb",
+        "storage": "32gb"
+    },
+
+    "customizations": {
+        "codespaces": {
+            "openFiles": [
+                "README.md",
+                "Makefile",
+                "src/pgec_app.erl",
+                "src/pgec_sup.erl"
+            ]
+        }
+    },
+
+    "forwardPorts": [3000,
+                     3306,
+                     6379,
+                     8080,
+                     9090,
+                     9100,
+                     11211],
+
+    "features": {
+        "ghcr.io/devcontainers/features/sshd:1": {},
+
+        "ghcr.io/devcontainers/features/common-utils:2": {},
+
+        "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+    }
+}
