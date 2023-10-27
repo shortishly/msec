@@ -3,7 +3,7 @@
 
     "dockerFile": "Dockerfile",
 
-    "postStartCommand": "docker compose up --detach",
+    "postStartCommand": "./bin/devcontainer-post-start",
 
     "containerEnv": {
         "PGMP_DATABASE_USER": "postgres",
