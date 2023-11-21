@@ -363,7 +363,14 @@ handle_event(internal,
              _) ->
     {keep_state_and_data,
      nei({storage,
-          #{request => {put, Bucket, Key, Value, [], ?STD_TAG, infinity, false},
+          #{request => {put,
+                        Bucket,
+                        term_to_binary(Key),
+                        Value,
+                        [],
+                        ?STD_TAG,
+                        infinity,
+                        false},
             label => storage_label(Action, Detail)}})};
 
 handle_event(internal,
@@ -374,7 +381,14 @@ handle_event(internal,
              _) ->
     {keep_state_and_data,
      nei({storage,
-          #{request => {put, Bucket, Key, delete, [], ?STD_TAG, infinity, false},
+          #{request => {put,
+                        Bucket,
+                        term_to_binary(Key),
+                        delete,
+                        [],
+                        ?STD_TAG,
+                        infinity,
+                        false},
             label => storage_label(Action, Detail)}})};
 
 handle_event(internal,
@@ -386,7 +400,7 @@ handle_event(internal,
              _) ->
     {keep_state_and_data,
      nei({storage,
-          #{request => {get, Bucket, Key, ?STD_TAG},
+          #{request => {get, Bucket, term_to_binary(Key), ?STD_TAG},
             label => storage_label(Action, Detail)}})};
 
 handle_event(internal,
