@@ -23,6 +23,7 @@ services:
     environment:
       MSEC_REPLICA_UUID: ff275651-e77b-4acf-92f5-fb78b43ab40e
       MSEC_DATABASE_URI: mysql://root:secret@db:3306/shortishly
+      MSEC_TIMEOUT_EXPIRY: 60000
     volumes:
       - cache:/data
     ports:

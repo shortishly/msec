@@ -26,11 +26,14 @@ EDOC_OPTS = {preprocess, true}, {dir, "_site/edoc"}
 DEPS += leveled
 DEPS += metrics
 DEPS += msc
-DEPS += msmp
-DEPS += narcs
 DEPS += resp
 DEPS += rfc4122
-DEPS += scran
+
+dep_leveled_commit = 1.0.13
+dep_metrics_commit = 0.5.0
+dep_msc_commit = 0.1.5
+dep_resp_commit = 0.5.0
+dep_rfc4122_commit = 0.1.0
 
 SHELL_DEPS += sync
 
@@ -39,11 +42,8 @@ LOCAL_DEPS += ssl
 dep_leveled = $(if $(DEP_LN),ln ../../../martinsumner/leveled,git https://github.com/martinsumner/leveled.git)
 dep_metrics = $(if $(DEP_LN),ln ../../metrics,git https://github.com/shortishly/metrics.git)
 dep_msc = $(if $(DEP_LN),ln ../../msc,git https://github.com/shortishly/msc.git)
-dep_msmp = $(if $(DEP_LN),ln ../../msmp,git https://github.com/shortishly/msmp.git)
-dep_narcs = $(if $(DEP_LN),ln ../../narcs,git https://github.com/shortishly/narcs.git)
 dep_resp = $(if $(DEP_LN),ln ../../resp,git https://github.com/shortishly/resp.git)
 dep_rfc4122 = $(if $(DEP_LN),ln ../../rfc4122,git https://github.com/shortishly/rfc4122.git)
-dep_scran = $(if $(DEP_LN),ln ../../scran,git https://github.com/shortishly/scran.git)
 
 PLT_APPS += any
 PLT_APPS += asn1
